@@ -18,8 +18,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submission_action'])) 
         $admin_notes = $conn->real_escape_string($_POST['admin_notes'] ?? '');
 
         if ($action == 'approve') {
-            $stmt = $conn->prepare("UPDATE submissions SET status = 'Approved', admin_notes = ? WHERE id = ?");
-            $stmt->bind_param("si", $admin_notes, $submission_id);
+            $incentive_amount = !empty($_POST['incentive_amount']) ? (float)$_POST['incentive_amount'] : NULL;
+            $stmt = $conn->prepare("UPDATE submissions SET status = 'Approved', incentive_amount = ?, admin_notes = ? WHERE id = ?");
+            $stmt->bind_param("dsi", $incentive_amount, $admin_notes, $submission_id);
         } elseif ($action == 'reject') {
             $stmt = $conn->prepare("UPDATE submissions SET status = 'Rejected', admin_notes = ? WHERE id = ?");
             $stmt->bind_param("si", $admin_notes, $submission_id);
@@ -413,12 +414,26 @@ if ($current_view == 'submissions') {
             font-weight: 500;
         }
         
-        .form-group textarea {
+        .form-group input, .form-group textarea {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .form-group input {
+            margin-bottom: 0;
+        }
+        
+        .form-group textarea {
             resize: vertical;
+        }
+        
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
         }
         
         /* Responsive */
@@ -543,6 +558,7 @@ if ($current_view == 'submissions') {
                                             <th>User</th>
                                             <th>File</th>
                                             <th>Status</th>
+                                            <th>Incentive Amount</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -559,6 +575,20 @@ if ($current_view == 'submissions') {
                                                     <span class="status-badge status-<?php echo strtolower($submission['status']); ?>">
                                                         <?php echo $submission['status']; ?>
                                                     </span>
+                                                </td>
+                                                <td>
+                                                    <?php if ($submission['status'] == 'Pending'): ?>
+                                                        <span style="color: #666; font-style: italic;">TBD</span>
+                                                    <?php else: ?>
+                                                        <?php 
+                                                        $amount = $submission['incentive_amount'] ?? null;
+                                                        if ($amount !== null) {
+                                                            echo '$' . number_format($amount, 2);
+                                                        } else {
+                                                            echo '<span style="color: #666; font-style: italic;">N/A</span>';
+                                                        }
+                                                        ?>
+                                                    <?php endif; ?>
                                                 </td>
                                                 <td>
                                                     <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="btn btn-info">View</a>
@@ -596,6 +626,7 @@ if ($current_view == 'submissions') {
                                             <th>Registration Date</th>
                                             <th>Email Verified</th>
                                             <th>Submissions</th>
+                                            <th>Total Incentive Amount</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -606,6 +637,13 @@ if ($current_view == 'submissions') {
                                             $stmt->bind_param("i", $user['id']);
                                             $stmt->execute();
                                             $submission_count = $stmt->get_result()->fetch_assoc()['count'];
+                                            $stmt->close();
+                                            
+                                            // Get total incentive amount for this user
+                                            $stmt = $conn->prepare("SELECT SUM(incentive_amount) as total_amount FROM submissions WHERE user_id = ? AND status = 'Approved' AND incentive_amount IS NOT NULL");
+                                            $stmt->bind_param("i", $user['id']);
+                                            $stmt->execute();
+                                            $total_amount = $stmt->get_result()->fetch_assoc()['total_amount'];
                                             $stmt->close();
                                             ?>
                                             <tr>
@@ -619,6 +657,15 @@ if ($current_view == 'submissions') {
                                                     </span>
                                                 </td>
                                                 <td><?php echo $submission_count; ?></td>
+                                                <td>
+                                                    <?php 
+                                                    if ($total_amount !== null && $total_amount > 0) {
+                                                        echo '<span style="font-weight: bold; color: #28a745;">$' . number_format($total_amount, 2) . '</span>';
+                                                    } else {
+                                                        echo '<span style="color: #666; font-style: italic;">$0.00</span>';
+                                                    }
+                                                    ?>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     </tbody>
@@ -649,6 +696,7 @@ if ($current_view == 'submissions') {
                                             <th>Product</th>
                                             <th>Invoice</th>
                                             <th>Status</th>
+                                            <th>Incentive Amount</th>
                                             <th>Admin Notes</th>
                                             <th>Actions</th>
                                         </tr>
@@ -673,6 +721,20 @@ if ($current_view == 'submissions') {
                                                     <span class="status-badge status-<?php echo strtolower($submission['status']); ?>">
                                                         <?php echo $submission['status']; ?>
                                                     </span>
+                                                </td>
+                                                <td>
+                                                    <?php if ($submission['status'] == 'Pending'): ?>
+                                                        <span style="color: #666; font-style: italic;">TBD</span>
+                                                    <?php else: ?>
+                                                        <?php 
+                                                        $amount = $submission['incentive_amount'] ?? null;
+                                                        if ($amount !== null) {
+                                                            echo '$' . number_format($amount, 2);
+                                                        } else {
+                                                            echo '<span style="color: #666; font-style: italic;">N/A</span>';
+                                                        }
+                                                        ?>
+                                                    <?php endif; ?>
                                                 </td>
                                                 <td><?php echo htmlspecialchars($submission['admin_notes'] ?? 'N/A'); ?></td>
                                                 <td>
@@ -705,6 +767,11 @@ if ($current_view == 'submissions') {
                 <input type="hidden" name="submission_id" id="submissionId">
                 <input type="hidden" name="action" id="actionType">
                 
+                <div id="incentiveAmountGroup" class="form-group" style="display: none;">
+                    <label for="incentive_amount">Incentive Amount (Required):</label>
+                    <input type="number" name="incentive_amount" id="incentive_amount" step="0.01" min="0" placeholder="Enter incentive amount" required>
+                </div>
+                
                 <div class="form-group">
                     <label for="admin_notes">Admin Notes (Optional):</label>
                     <textarea name="admin_notes" id="admin_notes" rows="4" placeholder="Add any notes about this action..."></textarea>
@@ -723,12 +790,26 @@ if ($current_view == 'submissions') {
             document.getElementById('submissionId').value = submissionId;
             document.getElementById('actionType').value = action;
             document.getElementById('modalTitle').textContent = action.charAt(0).toUpperCase() + action.slice(1) + ' Submission #' + submissionId;
+            
+            // Show/hide incentive amount field based on action
+            const incentiveAmountGroup = document.getElementById('incentiveAmountGroup');
+            const incentiveAmountInput = document.getElementById('incentive_amount');
+            
+            if (action === 'approve') {
+                incentiveAmountGroup.style.display = 'block';
+                incentiveAmountInput.required = true;
+            } else {
+                incentiveAmountGroup.style.display = 'none';
+                incentiveAmountInput.required = false;
+            }
+            
             document.getElementById('actionModal').style.display = 'block';
         }
 
         function closeModal() {
             document.getElementById('actionModal').style.display = 'none';
             document.getElementById('admin_notes').value = '';
+            document.getElementById('incentive_amount').value = '';
         }
 
         // Close modal when clicking outside

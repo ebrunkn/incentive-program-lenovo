@@ -18,6 +18,39 @@ $stmt->bind_result($user_full_name, $user_email);
 $stmt->fetch();
 $stmt->close();
 
+// Handle Delete Submission
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['delete_submission'])) {
+    $submission_id = (int)$_POST['submission_id'];
+    
+    // Verify the submission belongs to the current user and is pending
+    $stmt = $conn->prepare("SELECT file_path FROM submissions WHERE id = ? AND user_id = ? AND status = 'Pending'");
+    $stmt->bind_param("ii", $submission_id, $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $submission = $result->fetch_assoc();
+        
+        // Delete the file from filesystem
+        if (file_exists($submission['file_path'])) {
+            unlink($submission['file_path']);
+        }
+        
+        // Delete the record from database
+        $stmt = $conn->prepare("DELETE FROM submissions WHERE id = ? AND user_id = ?");
+        $stmt->bind_param("ii", $submission_id, $user_id);
+        
+        if ($stmt->execute()) {
+            $upload_message = "Submission deleted successfully!";
+        } else {
+            $upload_message = "Error deleting submission: " . $stmt->error;
+        }
+        $stmt->close();
+    } else {
+        $upload_message = "Submission not found or cannot be deleted.";
+    }
+}
+
 // Handle Proof Upload
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['upload_proof'])) {
     if (isset($_FILES['proof_file']) && $_FILES['proof_file']['error'] == UPLOAD_ERR_OK) {
@@ -80,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['upload_proof'])) {
 
 // Fetch user's submissions
 $submissions = [];
-$stmt = $conn->prepare("SELECT id, original_filename, status, created_at, file_path FROM submissions WHERE user_id = ? ORDER BY created_at DESC");
+$stmt = $conn->prepare("SELECT id, original_filename, status, created_at, file_path, incentive_amount FROM submissions WHERE user_id = ? ORDER BY created_at DESC");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -179,19 +212,115 @@ $stmt->close();
                                 <td><?php echo date('Y-m-d', strtotime($submission['created_at'])); ?></td>
                                 <td><?php echo htmlspecialchars($submission['original_filename']); ?></td>
                                 <td><span class="status-<?php echo $submission['status']; ?>"><?php echo $submission['status']; ?></span></td>
-                                <td><?php echo $submission['incentive_amount'] ?? 'TBD'; ?></td>
+                                <td>
+                                    <?php if ($submission['status'] == 'Approved'): ?>
+                                        <?php 
+                                        $amount = $submission['incentive_amount'] ?? null;
+                                        if ($amount !== null) {
+                                            echo '$' . number_format($amount, 2);
+                                        } else {
+                                            echo '<span style="color: #666; font-style: italic;">N/A</span>';
+                                        }
+                                        ?>
+                                    <?php elseif ($submission['status'] == 'Pending'): ?>
+                                        <span style="color: #666; font-style: italic;">TBD</span>
+                                    <?php else: ?>
+                                        <span style="color: #666; font-style: italic;">N/A</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td>
                                     <?php if ($submission['status'] === 'Pending'): ?>
-                                        <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="reject-file-btn">Delete</a>
+                                        <button onclick="openDeleteModal(<?php echo $submission['id']; ?>, '<?php echo htmlspecialchars($submission['original_filename']); ?>')" class="reject-file-btn" style="border: none; cursor: pointer;">Delete</button>
                                     <?php endif; ?>
                                     <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="view-file-btn">View</a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
+                    <tfoot>
+                        <tr style="background-color: #f8f9fa; font-weight: bold;">
+                            <td colspan="3" style="text-align: right;">Total Incentive Amount:</td>
+                            <td>
+                                <?php 
+                                $total_amount = 0;
+                                foreach ($submissions as $submission) {
+                                    if ($submission['status'] == 'Approved' && $submission['incentive_amount'] !== null) {
+                                        $total_amount += (float)$submission['incentive_amount'];
+                                    }
+                                }
+                                if ($total_amount > 0) {
+                                    echo '$' . number_format($total_amount, 2);
+                                } else {
+                                    echo '<span style="color: #666; font-style: italic;">$0.00</span>';
+                                }
+                                ?>
+                            </td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
                 </table>
             <?php endif; ?>
         </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+        <div style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 400px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h3 style="margin-top: 0; color: #333;">Confirm Delete</h3>
+            <p>Are you sure you want to delete the submission "<span id="deleteFileName"></span>"?</p>
+            <p style="color: #666; font-size: 14px;">This action cannot be undone.</p>
+            <div style="text-align: right; margin-top: 20px;">
+                <button onclick="closeDeleteModal()" style="background-color: #6c757d; color: white; border: none; padding: 8px 16px; margin-right: 10px; border-radius: 4px; cursor: pointer;">Cancel</button>
+                <button onclick="confirmDelete()" style="background-color: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let deleteSubmissionId = null;
+
+        function openDeleteModal(submissionId, fileName) {
+            deleteSubmissionId = submissionId;
+            document.getElementById('deleteFileName').textContent = fileName;
+            document.getElementById('deleteModal').style.display = 'block';
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+            deleteSubmissionId = null;
+        }
+
+        function confirmDelete() {
+            if (deleteSubmissionId) {
+                // Create a form and submit it
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = 'dashboard.php';
+                
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'submission_id';
+                input.value = deleteSubmissionId;
+                
+                const actionInput = document.createElement('input');
+                actionInput.type = 'hidden';
+                actionInput.name = 'delete_submission';
+                actionInput.value = '1';
+                
+                form.appendChild(input);
+                form.appendChild(actionInput);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('deleteModal');
+            if (event.target == modal) {
+                closeDeleteModal();
+            }
+        }
+    </script>
 </body>
 </html>
