@@ -181,7 +181,9 @@ $stmt->close();
                                 <td><span class="status-<?php echo $submission['status']; ?>"><?php echo $submission['status']; ?></span></td>
                                 <td><?php echo $submission['incentive_amount'] ?? 'TBD'; ?></td>
                                 <td>
-                                    <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="reject-file-btn">Delete</a>
+                                    <?php if ($submission['status'] === 'Pending'): ?>
+                                        <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="reject-file-btn">Delete</a>
+                                    <?php endif; ?>
                                     <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="view-file-btn">View</a>
                                 </td>
                             </tr>
