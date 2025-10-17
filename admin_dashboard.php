@@ -17,6 +17,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submission_action'])) 
         $action = $_POST['action'];
         $admin_notes = $conn->real_escape_string($_POST['admin_notes'] ?? '');
 
+        // First, get user information for email notification
+        $user_stmt = $conn->prepare("SELECT u.email, u.full_name FROM submissions s JOIN users u ON s.user_id = u.id WHERE s.id = ?");
+        $user_stmt->bind_param("i", $submission_id);
+        $user_stmt->execute();
+        $user_result = $user_stmt->get_result();
+        $user_data = $user_result->fetch_assoc();
+        $user_stmt->close();
+
         if ($action == 'approve') {
             $incentive_amount = !empty($_POST['incentive_amount']) ? (float)$_POST['incentive_amount'] : NULL;
             $stmt = $conn->prepare("UPDATE submissions SET status = 'Approved', incentive_amount = ?, admin_notes = ? WHERE id = ?");
@@ -28,7 +36,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submission_action'])) 
 
         if (isset($stmt) && $stmt->execute()) {
             $admin_message = "Submission #{$submission_id} {$action}d successfully!";
-            // TODO: Send email notification to user about status change
+            
+            // Send email notification to user
+            if ($user_data) {
+                $email_sent = false;
+                if ($action == 'approve') {
+                    $email_sent = send_submission_status_notification(
+                        $user_data['email'], 
+                        $user_data['full_name'], 
+                        $submission_id, 
+                        'approve', 
+                        $incentive_amount, 
+                        $admin_notes
+                    );
+                } elseif ($action == 'reject') {
+                    $email_sent = send_submission_status_notification(
+                        $user_data['email'], 
+                        $user_data['full_name'], 
+                        $submission_id, 
+                        'reject', 
+                        null, 
+                        $admin_notes
+                    );
+                }
+                
+                if ($email_sent) {
+                    $admin_message .= " Email notification sent to user.";
+                } else {
+                    $admin_message .= " Warning: Email notification failed to send.";
+                }
+            }
         } else if (isset($stmt)) {
             $admin_message = "Error performing action: " . $stmt->error;
         }
