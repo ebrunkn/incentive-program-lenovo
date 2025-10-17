@@ -169,6 +169,7 @@ $stmt->close();
                             <th>Date Uploaded</th>
                             <th>Original Filename</th>
                             <th>Status</th>
+                            <th>Incentive Amount</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -178,9 +179,9 @@ $stmt->close();
                                 <td><?php echo date('Y-m-d', strtotime($submission['created_at'])); ?></td>
                                 <td><?php echo htmlspecialchars($submission['original_filename']); ?></td>
                                 <td><span class="status-<?php echo $submission['status']; ?>"><?php echo $submission['status']; ?></span></td>
+                                <td><?php echo $submission['incentive_amount'] ?? 'TBD'; ?></td>
                                 <td>
-                                    <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="accept-file-btn">Accept</a>
-                                    <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="reject-file-btn">Reject</a>
+                                    <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="reject-file-btn">Delete</a>
                                     <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="view-file-btn">View</a>
                                 </td>
                             </tr>
