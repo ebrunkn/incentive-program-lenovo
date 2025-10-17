@@ -121,6 +121,8 @@ $stmt->close();
         .status-Approved { color: green; }
         .status-Rejected { color: red; }
         .view-file-btn { background-color: #007bff; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; }
+        .accept-file-btn { background-color: green; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; }
+        .reject-file-btn { background-color: red; color: white; padding: 5px 10px; border-radius: 4px; text-decoration: none; }
         .view-file-btn:hover { background-color: #0056b3; }
     </style>
 </head>
@@ -167,7 +169,7 @@ $stmt->close();
                             <th>Date Uploaded</th>
                             <th>Original Filename</th>
                             <th>Status</th>
-                            <th>View</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -176,7 +178,11 @@ $stmt->close();
                                 <td><?php echo date('Y-m-d', strtotime($submission['created_at'])); ?></td>
                                 <td><?php echo htmlspecialchars($submission['original_filename']); ?></td>
                                 <td><span class="status-<?php echo $submission['status']; ?>"><?php echo $submission['status']; ?></span></td>
-                                <td><a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="view-file-btn">View File</a></td>
+                                <td>
+                                    <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="accept-file-btn">Accept</a>
+                                    <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="reject-file-btn">Reject</a>
+                                    <a href="<?php echo htmlspecialchars($submission['file_path']); ?>" target="_blank" class="view-file-btn">View</a>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
