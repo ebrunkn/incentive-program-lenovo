@@ -127,6 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
             font-family: Arial, sans-serif;
             background-color: #f4f4f4;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
@@ -168,9 +169,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['login'])) {
         .success { color: green; text-align: center; margin-bottom: 10px; }
         .links { text-align: center; margin-top: 20px; }
         .links a { color: #007bff; text-decoration: none; }
+        .logo-container {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo-container img {
+            max-width: 200px;
+            height: auto;
+        }
     </style>
 </head>
 <body>
+    <div class="logo-container">
+        <img src="images/lenovo-logo.png" alt="Lenovo Logo">
+    </div>
     <div class="container">
         <div class="form-section">
             <h2>Register</h2>
